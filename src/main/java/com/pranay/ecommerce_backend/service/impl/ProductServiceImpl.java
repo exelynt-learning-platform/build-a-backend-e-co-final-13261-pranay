@@ -9,8 +9,10 @@ import com.pranay.ecommerce_backend.exception.ResourceNotFoundException;
 import com.pranay.ecommerce_backend.repository.ProductRepository;
 import com.pranay.ecommerce_backend.service.ProductService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
@@ -19,6 +21,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public ProductResponse createProduct(ProductRequest request) {
+        log.debug("Creating product: {}", request.getName());
         Product product = Product.builder()
                 .name(request.getName())
                 .description(request.getDescription())
@@ -26,34 +29,47 @@ public class ProductServiceImpl implements ProductService {
                 .stockQuantity(request.getStockQuantity())
                 .imageUrl(request.getImageUrl())
                 .build();
-        return mapToResponse(productRepository.save(product));
+        Product savedProduct = productRepository.save(product);
+        log.debug("Product created with id: {}", savedProduct.getId());
+        return mapToResponse(savedProduct);
     }
 
     @Override
     public List<ProductResponse> getAllProducts() {
-        return productRepository.findAll().stream().map(this::mapToResponse).toList();
+        log.debug("Fetching all products");
+        List<ProductResponse> products = productRepository.findAll().stream()
+                .map(this::mapToResponse)
+                .toList();
+        log.debug("Total products fetched: {}", products.size());
+        return products;
     }
 
     @Override
     public ProductResponse getProductById(Long productId) {
+        log.debug("Fetching product by id: {}", productId);
         return mapToResponse(getProductEntity(productId));
     }
 
     @Override
     public ProductResponse updateProduct(Long productId, ProductRequest request) {
+        log.debug("Updating product id: {}", productId);
         Product product = getProductEntity(productId);
         product.setName(request.getName());
         product.setDescription(request.getDescription());
         product.setPrice(request.getPrice());
         product.setStockQuantity(request.getStockQuantity());
         product.setImageUrl(request.getImageUrl());
-        return mapToResponse(productRepository.save(product));
+        Product updatedProduct = productRepository.save(product);
+        log.debug("Product updated successfully with id: {}", updatedProduct.getId());
+        return mapToResponse(updatedProduct);
     }
 
     @Override
     public void deleteProduct(Long productId) {
+        log.debug("Deleting product id: {}", productId);
         Product product = getProductEntity(productId);
         productRepository.delete(product);
+        log.debug("Product deleted successfully with id: {}", productId);
     }
 
     private Product getProductEntity(Long productId) {

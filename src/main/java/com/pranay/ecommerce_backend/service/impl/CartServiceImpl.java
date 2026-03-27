@@ -2,6 +2,7 @@ package com.pranay.ecommerce_backend.service.impl;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 import com.pranay.ecommerce_backend.dto.cart.AddCartItemRequest;
 import com.pranay.ecommerce_backend.dto.cart.CartItemResponse;
@@ -19,9 +20,11 @@ import com.pranay.ecommerce_backend.repository.ProductRepository;
 import com.pranay.ecommerce_backend.repository.UserRepository;
 import com.pranay.ecommerce_backend.service.CartService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CartServiceImpl implements CartService {
@@ -34,49 +37,74 @@ public class CartServiceImpl implements CartService {
     @Override
     @Transactional
     public CartResponse addItem(String userEmail, AddCartItemRequest request) {
+        log.debug("Add item request by user: {} for productId: {}, quantity: {}", userEmail, request.getProductId(), request.getQuantity());
+
         User user = getUser(userEmail);
         Cart cart = getOrCreateCart(user);
         Product product = getProduct(request.getProductId());
-        validateStock(product, request.getQuantity());
 
-        CartItem cartItem = cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId())
-                .orElse(CartItem.builder().cart(cart).product(product).quantity(0).build());
+        CartItem cartItem = getOrCreateCartItem(cart, product);
 
-        int requestedQuantity = cartItem.getQuantity() + request.getQuantity();
-        validateStock(product, requestedQuantity);
-        cartItem.setQuantity(requestedQuantity);
+        int newQuantity = cartItem.getQuantity() + request.getQuantity();
+        validateStock(product, newQuantity);
+
+        cartItem.setQuantity(newQuantity);
+
         if (cartItem.getId() == null) {
             cart.getItems().add(cartItem);
         }
+
         cartItemRepository.save(cartItem);
+        log.debug("Cart item saved. cartItemId: {}, newQuantity: {}", cartItem.getId(), cartItem.getQuantity());
+
         return mapCartResponse(getDetailedCart(user, cart));
+    }
+
+    private CartItem getOrCreateCartItem(Cart cart, Product product) {
+        return cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId())
+                .orElse(CartItem.builder()
+                        .cart(cart)
+                        .product(product)
+                        .quantity(0)
+                        .build());
     }
 
     @Override
     @Transactional
     public CartResponse updateItemQuantity(String userEmail, Long cartItemId, UpdateCartItemRequest request) {
+        log.debug("Update cart item request by user: {} for cartItemId: {}, newQuantity: {}", userEmail, cartItemId, request.getQuantity());
+
         CartItem cartItem = getOwnedCartItem(userEmail, cartItemId);
         validateStock(cartItem.getProduct(), request.getQuantity());
         cartItem.setQuantity(request.getQuantity());
         cartItemRepository.save(cartItem);
+
+        log.debug("Cart item updated. cartItemId: {}, quantity: {}", cartItem.getId(), cartItem.getQuantity());
         return mapCartResponse(cartItem.getCart());
     }
 
     @Override
     @Transactional
     public CartResponse removeItem(String userEmail, Long cartItemId) {
+        log.debug("Remove cart item request by user: {} for cartItemId: {}", userEmail, cartItemId);
+
         CartItem cartItem = getOwnedCartItem(userEmail, cartItemId);
         Cart cart = cartItem.getCart();
         cartItemRepository.delete(cartItem);
         cart.getItems().removeIf(item -> item.getId().equals(cartItemId));
+
+        log.debug("Cart item removed. cartItemId: {}", cartItemId);
         return mapCartResponse(cart);
     }
 
     @Override
     @Transactional(readOnly = true)
     public CartResponse getCart(String userEmail) {
+        log.debug("Get cart request by user: {}", userEmail);
+
         User user = getUser(userEmail);
         Cart cart = getOrCreateCart(user);
+
         return mapCartResponse(getDetailedCart(user, cart));
     }
 
@@ -97,7 +125,8 @@ public class CartServiceImpl implements CartService {
     }
 
     private Cart getDetailedCart(User user, Cart fallbackCart) {
-        return cartRepository.findDetailedByUserId(user.getId()).orElse(fallbackCart);
+        Optional<Cart> detailedCart = cartRepository.findDetailedByUserId(user.getId());
+        return detailedCart.orElse(fallbackCart);
     }
 
     private User getUser(String email) {

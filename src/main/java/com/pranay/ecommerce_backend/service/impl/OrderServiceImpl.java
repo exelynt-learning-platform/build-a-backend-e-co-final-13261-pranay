@@ -16,9 +16,11 @@ import com.pranay.ecommerce_backend.repository.ProductRepository;
 import com.pranay.ecommerce_backend.repository.UserRepository;
 import com.pranay.ecommerce_backend.service.OrderService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j  // <- Lombok logger for debug
 @Service
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
@@ -31,6 +33,8 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public OrderResponse createOrder(String userEmail, CreateOrderRequest request) {
+        log.debug("Create order request by user: {} with shippingAddress: {}", userEmail, request.getShippingAddress());
+
         User user = getUser(userEmail);
         Cart cart = cartRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Cart not found for user"));
@@ -41,8 +45,11 @@ public class OrderServiceImpl implements OrderService {
 
         CustomerOrder order = initializeOrder(user, request.getShippingAddress());
         order.setTotalPrice(addCartItemsToOrder(cart.getItems(), order));
+
         CustomerOrder savedOrder = orderRepository.save(order);
         cart.getItems().clear();
+
+        log.debug("Order created successfully. orderId: {}", savedOrder.getId());
         return mapOrderResponse(savedOrder);
     }
 
@@ -62,6 +69,8 @@ public class OrderServiceImpl implements OrderService {
             Product product = loadProductForUpdate(cartItem.getProduct().getId());
             deductStock(product, cartItem.getQuantity());
             total = total.add(addOrderItem(order, product, cartItem.getQuantity()));
+            log.debug("Added productId: {} to order, quantity: {}, lineTotal: {}", product.getId(), cartItem.getQuantity(),
+                    product.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity())));
         }
         return total;
     }
@@ -76,6 +85,7 @@ public class OrderServiceImpl implements OrderService {
             throw new ValidationException("Insufficient stock for product: " + product.getName());
         }
         product.setStockQuantity(product.getStockQuantity() - quantity);
+        log.debug("Stock deducted for productId: {}. Remaining stock: {}", product.getId(), product.getStockQuantity());
     }
 
     private BigDecimal addOrderItem(CustomerOrder order, Product product, Integer quantity) {
@@ -93,6 +103,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public List<OrderResponse> getOrdersForUser(String userEmail) {
+        log.debug("Get all orders request by user: {}", userEmail);
         User user = getUser(userEmail);
         return orderRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).stream()
                 .map(this::mapOrderResponse)
@@ -102,6 +113,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public OrderResponse getOrderById(String userEmail, Long orderId) {
+        log.debug("Get order by id request by user: {}, orderId: {}", userEmail, orderId);
         User user = getUser(userEmail);
         CustomerOrder order = orderRepository.findByIdAndUserId(orderId, user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));

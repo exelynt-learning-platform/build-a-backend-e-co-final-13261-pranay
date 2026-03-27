@@ -19,11 +19,13 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
@@ -41,6 +43,7 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public PaymentIntentResponse createPaymentIntent(String userEmail, PaymentIntentRequest request) {
+        log.debug("Creating payment intent for user: {} orderId: {}", userEmail, request.getOrderId());
         CustomerOrder order = getOwnedOrder(userEmail, request.getOrderId());
         if (order.getStatus() != OrderStatus.PENDING && order.getStatus() != OrderStatus.FAILED) {
             throw new ValidationException("Payment cannot be created for order status: " + order.getStatus());
@@ -60,6 +63,8 @@ public class PaymentServiceImpl implements PaymentService {
             order.setPaymentIntentId(paymentIntent.getId());
             orderRepository.save(order);
 
+            log.debug("Payment intent created. paymentIntentId: {} for orderId: {}", paymentIntent.getId(), order.getId());
+
             return PaymentIntentResponse.builder()
                     .orderId(order.getId())
                     .paymentIntentId(paymentIntent.getId())
@@ -67,6 +72,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .status(paymentIntent.getStatus())
                     .build();
         } catch (StripeException ex) {
+            log.debug("Stripe exception during payment intent creation: {}", ex.getMessage());
             throw new ValidationException("Unable to create payment intent: " + ex.getMessage());
         }
     }
@@ -74,6 +80,7 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public PaymentResponse confirmPayment(String userEmail, PaymentConfirmationRequest request) {
+        log.debug("Confirming payment for user: {} paymentIntentId: {}", userEmail, request.getPaymentIntentId());
         CustomerOrder order = orderRepository.findByPaymentIntentId(request.getPaymentIntentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found for payment intent"));
 
@@ -85,6 +92,8 @@ public class PaymentServiceImpl implements PaymentService {
             order.setStatus(mapOrderStatus(paymentStatus));
             orderRepository.save(order);
 
+            log.debug("Payment confirmed. orderId: {}, paymentStatus: {}", order.getId(), paymentStatus);
+
             return PaymentResponse.builder()
                     .orderId(order.getId())
                     .paymentIntentId(paymentIntent.getId())
@@ -92,6 +101,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .paymentStatus(paymentStatus)
                     .build();
         } catch (StripeException ex) {
+            log.debug("Stripe exception during payment confirmation: {}", ex.getMessage());
             throw new ValidationException("Unable to confirm payment: " + ex.getMessage());
         }
     }

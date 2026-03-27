@@ -13,6 +13,7 @@ import com.pranay.ecommerce_backend.security.CustomUserDetailsService;
 import com.pranay.ecommerce_backend.security.JwtService;
 import com.pranay.ecommerce_backend.service.AuthService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -20,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
@@ -34,7 +36,10 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        log.debug("Registering new user with email: {}", request.getEmail());
+
         if (userRepository.existsByEmail(request.getEmail())) {
+            log.debug("Registration failed: Email already exists - {}", request.getEmail());
             throw new ValidationException("Email already registered");
         }
 
@@ -45,23 +50,38 @@ public class AuthServiceImpl implements AuthService {
                 .role(Role.USER)
                 .build();
         User savedUser = userRepository.save(user);
+        log.debug("User saved with id: {}", savedUser.getId());
 
         Cart cart = Cart.builder().user(savedUser).build();
         cartRepository.save(cart);
+        log.debug("Cart created for user id: {}", savedUser.getId());
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(savedUser.getEmail());
-        return buildAuthResponse(savedUser, jwtService.generateToken(userDetails));
+        String token = jwtService.generateToken(userDetails);
+        log.debug("JWT token generated for user id: {}", savedUser.getId());
+
+        return buildAuthResponse(savedUser, token);
     }
 
     @Override
     public AuthResponse login(LoginRequest request) {
+        log.debug("Login attempt for email: {}", request.getEmail());
+
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
+        log.debug("Authentication successful for email: {}", request.getEmail());
 
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new ValidationException("User not found"));
+                .orElseThrow(() -> {
+                    log.debug("Login failed: User not found - {}", request.getEmail());
+                    return new ValidationException("User not found");
+                });
+
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
-        return buildAuthResponse(user, jwtService.generateToken(userDetails));
+        String token = jwtService.generateToken(userDetails);
+        log.debug("JWT token generated for login, user id: {}", user.getId());
+
+        return buildAuthResponse(user, token);
     }
 
     private AuthResponse buildAuthResponse(User user, String token) {
