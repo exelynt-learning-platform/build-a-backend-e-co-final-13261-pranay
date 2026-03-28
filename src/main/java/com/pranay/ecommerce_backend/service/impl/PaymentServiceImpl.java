@@ -18,6 +18,7 @@ import com.stripe.model.PaymentIntent;
 import com.stripe.param.PaymentIntentCreateParams;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -128,10 +129,15 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private String resolveCurrency(PaymentIntentRequest request) {
-        if (StringUtils.hasText(request.getCurrency())) {
-            return request.getCurrency().trim().toLowerCase(Locale.ROOT);
+        String resolved = StringUtils.hasText(request.getCurrency())
+                ? request.getCurrency().trim().toLowerCase(Locale.ROOT)
+                : currency.toLowerCase(Locale.ROOT);
+
+        // Supported currencies (Stripe)
+        if (!List.of("usd", "inr", "eur").contains(resolved)) {
+            throw new ValidationException("Unsupported currency: " + resolved);
         }
-        return currency.toLowerCase(Locale.ROOT);
+        return resolved;
     }
 
     private OrderStatus mapOrderStatus(String paymentStatus) {

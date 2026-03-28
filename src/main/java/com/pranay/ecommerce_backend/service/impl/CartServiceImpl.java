@@ -34,6 +34,7 @@ public class CartServiceImpl implements CartService {
     @Override
     @Transactional
     public CartResponse addItem(String userEmail, AddCartItemRequest request) {
+        log.debug("Adding item to cart. userEmail={}, productId={}, quantity={}", userEmail, request.getProductId(), request.getQuantity());
         User user = getUser(userEmail);
         Cart cart = getOrCreateCart(user);
         Product product = getProduct(request.getProductId());
@@ -43,38 +44,54 @@ public class CartServiceImpl implements CartService {
         validateStock(product, newQuantity);
 
         cartItem.setQuantity(newQuantity);
-        if (cartItem.getId() == null) cart.getItems().add(cartItem);
+        if (cartItem.getId() == null) {
+            cart.getItems().add(cartItem);
+            log.debug("New cart item added to cart. productId={}", product.getId());
+        }
 
         cartItemRepository.save(cartItem);
-        return mapCartResponse(getDetailedCart(user));
+        log.debug("Cart item saved. cartItemId={}, newQuantity={}", cartItem.getId(), cartItem.getQuantity());
+
+        Cart detailedCart = getDetailedCart(user);
+        log.debug("Returning updated cart for userEmail={}", userEmail);
+        return mapCartResponse(detailedCart);
     }
 
     @Override
     @Transactional
     public CartResponse updateItemQuantity(String userEmail, Long cartItemId, UpdateCartItemRequest request) {
+        log.debug("Updating cart item quantity. userEmail={}, cartItemId={}, newQuantity={}", userEmail, cartItemId, request.getQuantity());
         CartItem cartItem = getOwnedCartItem(userEmail, cartItemId);
         validateStock(cartItem.getProduct(), request.getQuantity());
         cartItem.setQuantity(request.getQuantity());
         cartItemRepository.save(cartItem);
+        log.debug("Cart item quantity updated. cartItemId={}, updatedQuantity={}", cartItemId, request.getQuantity());
+
         return mapCartResponse(getDetailedCart(cartItem.getCart().getUser()));
     }
 
     @Override
     @Transactional
     public CartResponse removeItem(String userEmail, Long cartItemId) {
+        log.debug("Removing cart item. userEmail={}, cartItemId={}", userEmail, cartItemId);
         CartItem cartItem = getOwnedCartItem(userEmail, cartItemId);
         Cart cart = cartItem.getCart();
         cartItemRepository.delete(cartItem);
         cart.getItems().removeIf(item -> item.getId().equals(cartItemId));
+        log.debug("Cart item removed. cartItemId={}", cartItemId);
+
         return mapCartResponse(getDetailedCart(cart.getUser()));
     }
 
     @Override
     @Transactional(readOnly = true)
     public CartResponse getCart(String userEmail) {
+        log.debug("Fetching cart for userEmail={}", userEmail);
         User user = getUser(userEmail);
         return mapCartResponse(getDetailedCart(user));
     }
+
+    // --- private helpers ---
 
     private CartItem getOrCreateCartItem(Cart cart, Product product) {
         return cartItemRepository.findByCartIdAndProductId(cart.getId(), product.getId())
@@ -94,7 +111,11 @@ public class CartServiceImpl implements CartService {
 
     private Cart getOrCreateCart(User user) {
         return cartRepository.findByUserId(user.getId())
-                .orElseGet(() -> cartRepository.save(Cart.builder().user(user).build()));
+                .orElseGet(() -> {
+                    Cart newCart = cartRepository.save(Cart.builder().user(user).build());
+                    log.debug("Created new cart for userId={}", user.getId());
+                    return newCart;
+                });
     }
 
     private Cart getDetailedCart(User user) {
