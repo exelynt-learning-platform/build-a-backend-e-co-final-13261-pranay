@@ -1,0 +1,5 @@
+com\pranay\ecommerce_backend\service\AuthServiceImplTest.class
+com\pranay\ecommerce_backend\service\CartServiceImplTest.class
+com\pranay\ecommerce_backend\service\OrderServiceImplTest.class
+com\pranay\ecommerce_backend\EcommerceBackendApplicationTests.class
+com\pranay\ecommerce_backend\service\ProductServiceImplTest.class

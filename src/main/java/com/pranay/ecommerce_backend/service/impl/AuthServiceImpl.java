@@ -47,6 +47,8 @@ public class AuthServiceImpl implements AuthService {
                 .name(request.getName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
+
+                // Security reason: Force role to DEFAULT_USER to prevent privilege escalation
                 .role(Role.USER)
                 .build();
         User savedUser = userRepository.save(user);

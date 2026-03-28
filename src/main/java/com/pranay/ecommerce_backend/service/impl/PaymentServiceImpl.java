@@ -6,6 +6,7 @@ import com.pranay.ecommerce_backend.dto.payment.PaymentIntentResponse;
 import com.pranay.ecommerce_backend.dto.payment.PaymentResponse;
 import com.pranay.ecommerce_backend.entity.CustomerOrder;
 import com.pranay.ecommerce_backend.entity.OrderStatus;
+import com.pranay.ecommerce_backend.entity.PaymentStatus;
 import com.pranay.ecommerce_backend.entity.User;
 import com.pranay.ecommerce_backend.exception.ResourceNotFoundException;
 import com.pranay.ecommerce_backend.exception.ValidationException;
@@ -29,10 +30,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
-
-    private static final String PAYMENT_STATUS_SUCCEEDED = "succeeded";
-    private static final String PAYMENT_STATUS_PROCESSING = "processing";
-    private static final String PAYMENT_STATUS_REQUIRES_CAPTURE = "requires_capture";
 
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
@@ -138,13 +135,15 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private OrderStatus mapOrderStatus(String paymentStatus) {
-        if (PAYMENT_STATUS_SUCCEEDED.equalsIgnoreCase(paymentStatus)) {
-            return OrderStatus.PAID;
+        PaymentStatus status = PaymentStatus.fromString(paymentStatus);
+        switch (status) {
+            case SUCCEEDED:
+                return OrderStatus.PAID;
+            case PROCESSING:
+            case REQUIRES_CAPTURE:
+                return OrderStatus.PENDING;
+            default:
+                return OrderStatus.FAILED;
         }
-        if (PAYMENT_STATUS_PROCESSING.equalsIgnoreCase(paymentStatus)
-                || PAYMENT_STATUS_REQUIRES_CAPTURE.equalsIgnoreCase(paymentStatus)) {
-            return OrderStatus.PENDING;
-        }
-        return OrderStatus.FAILED;
     }
 }

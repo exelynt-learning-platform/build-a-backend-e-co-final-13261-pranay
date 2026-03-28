@@ -30,13 +30,10 @@ class CartServiceImplTest {
 
     @Mock
     private CartRepository cartRepository;
-
     @Mock
     private CartItemRepository cartItemRepository;
-
     @Mock
     private ProductRepository productRepository;
-
     @Mock
     private UserRepository userRepository;
 
@@ -46,33 +43,26 @@ class CartServiceImplTest {
     @Test
     void addItemShouldReturnUpdatedCart() {
         User user = User.builder().id(1L).email("user@example.com").role(Role.USER).build();
-        Product product = Product.builder()
-                .id(2L)
-                .name("Mouse")
-                .price(BigDecimal.valueOf(25))
-                .stockQuantity(10)
-                .build();
+        Product product = Product.builder().id(2L).name("Mouse").price(BigDecimal.valueOf(25)).stockQuantity(10).build();
         Cart cart = Cart.builder().id(3L).user(user).items(new ArrayList<>()).build();
 
         AddCartItemRequest request = new AddCartItemRequest();
-        request.setProductId(2L);
-        request.setQuantity(2);
+        request.setProductId(2L); request.setQuantity(2);
 
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
         when(cartRepository.findByUserId(user.getId())).thenReturn(Optional.of(cart));
         when(cartRepository.findDetailedByUserId(user.getId())).thenReturn(Optional.of(cart));
         when(productRepository.findById(2L)).thenReturn(Optional.of(product));
         when(cartItemRepository.findByCartIdAndProductId(3L, 2L)).thenReturn(Optional.empty());
-        when(cartItemRepository.save(any(CartItem.class))).thenAnswer(invocation -> {
-            CartItem item = invocation.getArgument(0);
-            item.setId(100L);
-            return item;
+        when(cartItemRepository.save(any(CartItem.class))).thenAnswer(inv -> {
+            CartItem i = inv.getArgument(0); i.setId(100L); return i;
         });
 
         CartResponse response = cartService.addItem(user.getEmail(), request);
 
         assertEquals(BigDecimal.valueOf(50), response.getTotalAmount());
         assertEquals(1, response.getItems().size());
+        assertEquals(2, response.getItems().get(0).getQuantity());
     }
 
     @Test
@@ -82,15 +72,13 @@ class CartServiceImplTest {
         Cart cart = Cart.builder().id(3L).user(user).items(new ArrayList<>()).build();
         CartItem item = CartItem.builder().id(4L).cart(cart).product(product).quantity(1).build();
 
-        UpdateCartItemRequest request = new UpdateCartItemRequest();
-        request.setQuantity(5);
+        UpdateCartItemRequest request = new UpdateCartItemRequest(); request.setQuantity(5);
 
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
         when(cartRepository.findByUserId(user.getId())).thenReturn(Optional.of(cart));
         when(cartItemRepository.findById(4L)).thenReturn(Optional.of(item));
 
-        assertThrows(ValidationException.class,
-                () -> cartService.updateItemQuantity(user.getEmail(), 4L, request));
+        assertThrows(ValidationException.class, () -> cartService.updateItemQuantity(user.getEmail(), 4L, request));
     }
 
     @Test
@@ -108,5 +96,6 @@ class CartServiceImplTest {
         cartService.removeItem(user.getEmail(), 4L);
 
         verify(cartItemRepository).delete(item);
+        assertEquals(0, cart.getItems().size());
     }
 }

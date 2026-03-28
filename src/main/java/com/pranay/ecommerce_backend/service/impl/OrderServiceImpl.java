@@ -20,7 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j  // <- Lombok logger for debug
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
@@ -43,10 +43,40 @@ public class OrderServiceImpl implements OrderService {
             throw new ValidationException("Cart is empty");
         }
 
+        // Step 1: Initialize order
         CustomerOrder order = initializeOrder(user, request.getShippingAddress());
-        order.setTotalPrice(addCartItemsToOrder(cart.getItems(), order));
 
+        // Step 2: Reserve stock (deduct temporarily)
+        BigDecimal totalPrice = BigDecimal.ZERO;
+        for (CartItem cartItem : cart.getItems()) {
+            Product product = loadProductForUpdate(cartItem.getProduct().getId());
+            if (product.getStockQuantity() < cartItem.getQuantity()) {
+                throw new ValidationException("Insufficient stock for product: " + product.getName());
+            }
+            totalPrice = totalPrice.add(product.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity())));
+        }
+
+        order.setTotalPrice(totalPrice);
+
+        // Step 3: Save order
         CustomerOrder savedOrder = orderRepository.save(order);
+
+        // Step 4: Deduct stock and create order items atomically
+        for (CartItem cartItem : cart.getItems()) {
+            Product product = loadProductForUpdate(cartItem.getProduct().getId());
+            product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
+            order.getItems().add(
+                    OrderItem.builder()
+                            .order(order)
+                            .product(product)
+                            .quantity(cartItem.getQuantity())
+                            .price(product.getPrice())
+                            .build()
+            );
+            log.debug("Product {} stock deducted: {}", product.getId(), product.getStockQuantity());
+        }
+
+        // Step 5: Clear cart
         cart.getItems().clear();
 
         log.debug("Order created successfully. orderId: {}", savedOrder.getId());
@@ -63,47 +93,14 @@ public class OrderServiceImpl implements OrderService {
                 .build();
     }
 
-    private BigDecimal addCartItemsToOrder(List<CartItem> cartItems, CustomerOrder order) {
-        BigDecimal total = BigDecimal.ZERO;
-        for (CartItem cartItem : cartItems) {
-            Product product = loadProductForUpdate(cartItem.getProduct().getId());
-            deductStock(product, cartItem.getQuantity());
-            total = total.add(addOrderItem(order, product, cartItem.getQuantity()));
-            log.debug("Added productId: {} to order, quantity: {}, lineTotal: {}", product.getId(), cartItem.getQuantity(),
-                    product.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity())));
-        }
-        return total;
-    }
-
     private Product loadProductForUpdate(Long productId) {
         return productRepository.findWithLockById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found with id: " + productId));
     }
 
-    private void deductStock(Product product, Integer quantity) {
-        if (product.getStockQuantity() < quantity) {
-            throw new ValidationException("Insufficient stock for product: " + product.getName());
-        }
-        product.setStockQuantity(product.getStockQuantity() - quantity);
-        log.debug("Stock deducted for productId: {}. Remaining stock: {}", product.getId(), product.getStockQuantity());
-    }
-
-    private BigDecimal addOrderItem(CustomerOrder order, Product product, Integer quantity) {
-        BigDecimal lineTotal = product.getPrice().multiply(BigDecimal.valueOf(quantity));
-        OrderItem orderItem = OrderItem.builder()
-                .order(order)
-                .product(product)
-                .quantity(quantity)
-                .price(product.getPrice())
-                .build();
-        order.getItems().add(orderItem);
-        return lineTotal;
-    }
-
     @Override
     @Transactional(readOnly = true)
     public List<OrderResponse> getOrdersForUser(String userEmail) {
-        log.debug("Get all orders request by user: {}", userEmail);
         User user = getUser(userEmail);
         return orderRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).stream()
                 .map(this::mapOrderResponse)
@@ -113,7 +110,6 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public OrderResponse getOrderById(String userEmail, Long orderId) {
-        log.debug("Get order by id request by user: {}, orderId: {}", userEmail, orderId);
         User user = getUser(userEmail);
         CustomerOrder order = orderRepository.findByIdAndUserId(orderId, user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));

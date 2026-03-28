@@ -41,7 +41,7 @@ class OrderServiceImplTest {
     private OrderServiceImpl orderService;
 
     @Test
-    void createOrderShouldConvertCartIntoOrder() {
+    void createOrderShouldConvertCartIntoOrderAndClearCart() {
         User user = User.builder().id(1L).email("user@example.com").role(Role.USER).build();
         Product product = Product.builder()
                 .id(2L)
@@ -72,6 +72,7 @@ class OrderServiceImplTest {
         assertEquals(99L, response.getId());
         assertEquals(BigDecimal.valueOf(200), response.getTotalPrice());
         assertEquals(2, product.getStockQuantity());
+        assertEquals(0, cart.getItems().size(), "Cart should be cleared after order creation");
     }
 
     @Test
