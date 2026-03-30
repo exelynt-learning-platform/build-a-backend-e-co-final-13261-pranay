@@ -84,11 +84,19 @@ public class CartServiceImpl implements CartService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public CartResponse getCart(String userEmail) {
         log.debug("Fetching cart for userEmail={}", userEmail);
         User user = getUser(userEmail);
-        return mapCartResponse(getDetailedCart(user));
+
+        Cart cart = cartRepository.findDetailedByUserId(user.getId())
+                .orElseGet(() -> {
+                    Cart newCart = cartRepository.save(Cart.builder().user(user).build());
+                    log.debug("Created new cart for userId={}", user.getId());
+                    return newCart;
+                });
+
+        return mapCartResponse(cart);
     }
 
     // --- private helpers ---
@@ -100,9 +108,13 @@ public class CartServiceImpl implements CartService {
 
     private CartItem getOwnedCartItem(String userEmail, Long cartItemId) {
         User user = getUser(userEmail);
-        Cart cart = getOrCreateCart(user);
+
+        Cart cart = cartRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Cart not found"));
+
         CartItem item = cartItemRepository.findById(cartItemId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cart item not found: " + cartItemId));
+
         if (item.getCart() == null || !item.getCart().getId().equals(cart.getId())) {
             throw new ValidationException("You can only modify your own cart");
         }
@@ -120,7 +132,7 @@ public class CartServiceImpl implements CartService {
 
     private Cart getDetailedCart(User user) {
         return cartRepository.findDetailedByUserId(user.getId())
-                .orElseGet(() -> getOrCreateCart(user));
+                .orElseThrow(() -> new ResourceNotFoundException("Cart not found for user: " + user.getId()));
     }
 
     private User getUser(String email) {

@@ -33,13 +33,20 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public OrderResponse createOrder(String userEmail, CreateOrderRequest request) {
-        log.debug("Create order request by user: {} with shippingAddress: {}", userEmail, request.getShippingAddress());
+        log.info("Creating order for user: {}", userEmail);
+
+        log.debug("Shipping address: {}", request.getShippingAddress());
 
         User user = getUser(userEmail);
+
         Cart cart = cartRepository.findByUserId(user.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Cart not found for user"));
+                .orElseThrow(() -> {
+                    log.error("Cart not found for userId: {}", user.getId());
+                    return new ResourceNotFoundException("Cart not found for user");
+                });
 
         if (cart.getItems().isEmpty()) {
+            log.warn("Cart is empty for userId: {}", user.getId());
             throw new ValidationException("Cart is empty");
         }
 
@@ -48,23 +55,23 @@ public class OrderServiceImpl implements OrderService {
 
         // Step 2: Reserve stock (deduct temporarily)
         BigDecimal totalPrice = BigDecimal.ZERO;
+
+        //  SINGLE LOOP (critical fix)
         for (CartItem cartItem : cart.getItems()) {
+
             Product product = loadProductForUpdate(cartItem.getProduct().getId());
+
             if (product.getStockQuantity() < cartItem.getQuantity()) {
                 throw new ValidationException("Insufficient stock for product: " + product.getName());
             }
-            totalPrice = totalPrice.add(product.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity())));
-        }
 
-        order.setTotalPrice(totalPrice);
-
-        // Step 3: Save order
-        CustomerOrder savedOrder = orderRepository.save(order);
-
-        // Step 4: Deduct stock and create order items atomically
-        for (CartItem cartItem : cart.getItems()) {
-            Product product = loadProductForUpdate(cartItem.getProduct().getId());
+            //  deduct immediately (no gap)
             product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
+
+            totalPrice = totalPrice.add(
+                    product.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()))
+            );
+
             order.getItems().add(
                     OrderItem.builder()
                             .order(order)
@@ -73,13 +80,17 @@ public class OrderServiceImpl implements OrderService {
                             .price(product.getPrice())
                             .build()
             );
-            log.debug("Product {} stock deducted: {}", product.getId(), product.getStockQuantity());
         }
 
-        // Step 5: Clear cart
+        order.setTotalPrice(totalPrice);
+
+        CustomerOrder savedOrder = orderRepository.save(order);
+
+        // clear cart
         cart.getItems().clear();
 
-        log.debug("Order created successfully. orderId: {}", savedOrder.getId());
+        log.info("Order created successfully with id: {}", savedOrder.getId());
+
         return mapOrderResponse(savedOrder);
     }
 
@@ -102,15 +113,18 @@ public class OrderServiceImpl implements OrderService {
     @Transactional(readOnly = true)
     public List<OrderResponse> getOrdersForUser(String userEmail) {
         User user = getUser(userEmail);
+        log.info("Fetching orders for user: {}", userEmail);
         return orderRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).stream()
                 .map(this::mapOrderResponse)
                 .toList();
+
     }
 
     @Override
     @Transactional(readOnly = true)
     public OrderResponse getOrderById(String userEmail, Long orderId) {
         User user = getUser(userEmail);
+        log.info("Fetching orderId: {} for user: {}", orderId, userEmail);
         CustomerOrder order = orderRepository.findByIdAndUserId(orderId, user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
         return mapOrderResponse(order);

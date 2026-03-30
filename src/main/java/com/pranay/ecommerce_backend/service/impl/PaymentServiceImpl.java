@@ -38,6 +38,9 @@ public class PaymentServiceImpl implements PaymentService {
     @Value("${stripe.currency}")
     private String currency;
 
+    @Value("${app.supported.currencies}")
+    private List<String> supportedCurrencies;
+
     @Override
     @Transactional
     public PaymentIntentResponse createPaymentIntent(String userEmail, PaymentIntentRequest request) {
@@ -78,16 +81,32 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public PaymentResponse confirmPayment(String userEmail, PaymentConfirmationRequest request) {
+
         log.debug("Confirming payment for user: {} paymentIntentId: {}", userEmail, request.getPaymentIntentId());
-        CustomerOrder order = orderRepository.findByPaymentIntentId(request.getPaymentIntentId())
+
+        //  LOCKED FETCH (IMPORTANT)
+        CustomerOrder order = orderRepository.findByPaymentIntentIdForUpdate(request.getPaymentIntentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found for payment intent"));
 
         validateUserAccess(userEmail, order);
 
+        //  Prevent double confirmation
+        if (order.getStatus() == OrderStatus.PAID) {
+            throw new ValidationException("Payment already confirmed for this order");
+        }
+
         try {
             PaymentIntent paymentIntent = PaymentIntent.retrieve(request.getPaymentIntentId());
             String paymentStatus = paymentIntent.getStatus();
-            order.setStatus(mapOrderStatus(paymentStatus));
+
+            OrderStatus newStatus = mapOrderStatus(paymentStatus);
+
+            //  only valid transition allow
+            if (order.getStatus() == OrderStatus.PAID) {
+                throw new ValidationException("Order already paid");
+            }
+
+            order.setStatus(newStatus);
             orderRepository.save(order);
 
             log.debug("Payment confirmed. orderId: {}, paymentStatus: {}", order.getId(), paymentStatus);
@@ -98,6 +117,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .orderStatus(order.getStatus())
                     .paymentStatus(paymentStatus)
                     .build();
+
         } catch (StripeException ex) {
             log.debug("Stripe exception during payment confirmation: {}", ex.getMessage());
             throw new ValidationException("Unable to confirm payment: " + ex.getMessage());
@@ -133,10 +153,15 @@ public class PaymentServiceImpl implements PaymentService {
                 ? request.getCurrency().trim().toLowerCase(Locale.ROOT)
                 : currency.toLowerCase(Locale.ROOT);
 
-        // Supported currencies (Stripe)
-        if (!List.of("usd", "inr", "eur").contains(resolved)) {
+        // normalize config values also
+        List<String> normalizedCurrencies = supportedCurrencies.stream()
+                .map(c -> c.toLowerCase(Locale.ROOT))
+                .toList();
+
+        if (!normalizedCurrencies.contains(resolved)) {
             throw new ValidationException("Unsupported currency: " + resolved);
         }
+
         return resolved;
     }
 

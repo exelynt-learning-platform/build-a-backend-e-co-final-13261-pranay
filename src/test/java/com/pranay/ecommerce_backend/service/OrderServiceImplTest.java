@@ -20,7 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceImplTest {
@@ -73,6 +73,7 @@ class OrderServiceImplTest {
         assertEquals(BigDecimal.valueOf(200), response.getTotalPrice());
         assertEquals(2, product.getStockQuantity());
         assertEquals(0, cart.getItems().size(), "Cart should be cleared after order creation");
+        verify(productRepository, times(1)).findWithLockById(product.getId());
     }
 
     @Test

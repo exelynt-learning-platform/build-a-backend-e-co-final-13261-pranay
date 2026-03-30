@@ -91,11 +91,27 @@ class CartServiceImplTest {
 
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
         when(cartRepository.findByUserId(user.getId())).thenReturn(Optional.of(cart));
+        when(cartRepository.findDetailedByUserId(user.getId())).thenReturn(Optional.of(cart));
         when(cartItemRepository.findById(4L)).thenReturn(Optional.of(item));
 
         cartService.removeItem(user.getEmail(), 4L);
 
         verify(cartItemRepository).delete(item);
         assertEquals(0, cart.getItems().size());
+    }
+
+    @Test
+    void getCartShouldCreateCartIfNotExists() {
+        User user = User.builder().id(1L).email("user@example.com").role(Role.USER).build();
+        Cart newCart = Cart.builder().id(10L).user(user).items(new ArrayList<>()).build();
+
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(cartRepository.findDetailedByUserId(user.getId())).thenReturn(Optional.empty());
+        when(cartRepository.save(any(Cart.class))).thenReturn(newCart);
+
+        CartResponse response = cartService.getCart(user.getEmail());
+
+        assertEquals(10L, response.getCartId());
+        verify(cartRepository).save(any(Cart.class));
     }
 }
