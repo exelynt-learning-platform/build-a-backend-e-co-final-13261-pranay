@@ -14,6 +14,7 @@ import com.pranay.ecommerce_backend.security.JwtService;
 import com.pranay.ecommerce_backend.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -25,6 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
+
+    @Value("${app.default.role}")
+    private String defaultRole;
 
     private final UserRepository userRepository;
     private final CartRepository cartRepository;
@@ -47,10 +51,9 @@ public class AuthServiceImpl implements AuthService {
                 .name(request.getName())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
-
-                // Security reason: Force role to USER to prevent privilege escalation
-                .role(Role.USER)
+                .role(resolveDefaultRole()) // ✅ FIXED
                 .build();
+
         User savedUser = userRepository.save(user);
         log.debug("User saved with id: {}", savedUser.getId());
 
@@ -71,7 +74,6 @@ public class AuthServiceImpl implements AuthService {
 
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
-        log.debug("Authentication successful for email: {}", request.getEmail());
 
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> {
@@ -81,9 +83,23 @@ public class AuthServiceImpl implements AuthService {
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
         String token = jwtService.generateToken(userDetails);
-        log.debug("JWT token generated for login, user id: {}", user.getId());
 
         return buildAuthResponse(user, token);
+    }
+
+    // ✅ SAFE ROLE RESOLVER
+    private Role resolveDefaultRole() {
+        if (defaultRole == null || defaultRole.isBlank()) {
+            log.warn("Default role not configured, falling back to USER");
+            return Role.USER;
+        }
+
+        try {
+            return Role.valueOf(defaultRole.toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            log.error("Invalid role configured: {}", defaultRole);
+            return Role.USER;
+        }
     }
 
     private AuthResponse buildAuthResponse(User user, String token) {

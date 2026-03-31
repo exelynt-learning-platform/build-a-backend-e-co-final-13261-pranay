@@ -12,6 +12,7 @@ com\pranay\ecommerce_backend\entity\User.class
 com\pranay\ecommerce_backend\dto\cart\AddCartItemRequest.class
 com\pranay\ecommerce_backend\exception\UnauthorizedException.class
 com\pranay\ecommerce_backend\exception\GlobalExceptionHandler.class
+com\pranay\ecommerce_backend\service\impl\InventoryServiceImpl.class
 com\pranay\ecommerce_backend\service\impl\PaymentServiceImpl.class
 com\pranay\ecommerce_backend\repository\OrderItemRepository.class
 com\pranay\ecommerce_backend\dto\order\OrderItemResponse$OrderItemResponseBuilder.class
@@ -40,6 +41,7 @@ com\pranay\ecommerce_backend\security\SecurityConfig.class
 com\pranay\ecommerce_backend\dto\auth\LoginRequest.class
 com\pranay\ecommerce_backend\dto\cart\CartResponse$CartResponseBuilder.class
 com\pranay\ecommerce_backend\controller\AuthController.class
+com\pranay\ecommerce_backend\service\InventoryService.class
 com\pranay\ecommerce_backend\dto\payment\PaymentIntentRequest.class
 com\pranay\ecommerce_backend\service\impl\ProductServiceImpl.class
 com\pranay\ecommerce_backend\controller\ProductController.class

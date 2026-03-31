@@ -14,10 +14,12 @@ import com.pranay.ecommerce_backend.repository.CartRepository;
 import com.pranay.ecommerce_backend.repository.OrderRepository;
 import com.pranay.ecommerce_backend.repository.ProductRepository;
 import com.pranay.ecommerce_backend.repository.UserRepository;
+import com.pranay.ecommerce_backend.service.InventoryService;
 import com.pranay.ecommerce_backend.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
@@ -29,9 +31,10 @@ public class OrderServiceImpl implements OrderService {
     private final CartRepository cartRepository;
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
+    private final InventoryService inventoryService;
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public OrderResponse createOrder(String userEmail, CreateOrderRequest request) {
         log.info("Creating order for user: {}", userEmail);
 
@@ -39,7 +42,7 @@ public class OrderServiceImpl implements OrderService {
 
         User user = getUser(userEmail);
 
-        Cart cart = cartRepository.findByUserId(user.getId())
+        Cart cart = cartRepository.findDetailedByUserId(user.getId())
                 .orElseThrow(() -> {
                     log.error("Cart not found for userId: {}", user.getId());
                     return new ResourceNotFoundException("Cart not found for user");
@@ -61,12 +64,7 @@ public class OrderServiceImpl implements OrderService {
 
             Product product = loadProductForUpdate(cartItem.getProduct().getId());
 
-            if (product.getStockQuantity() < cartItem.getQuantity()) {
-                throw new ValidationException("Insufficient stock for product: " + product.getName());
-            }
-
-            //  deduct immediately (no gap)
-            product.setStockQuantity(product.getStockQuantity() - cartItem.getQuantity());
+            inventoryService.reserveStock(product, cartItem.getQuantity());
 
             totalPrice = totalPrice.add(
                     product.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity()))
@@ -85,6 +83,7 @@ public class OrderServiceImpl implements OrderService {
         order.setTotalPrice(totalPrice);
 
         CustomerOrder savedOrder = orderRepository.save(order);
+        orderRepository.flush();
 
         // clear cart
         cart.getItems().clear();

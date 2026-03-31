@@ -76,6 +76,7 @@ class CartServiceImplTest {
 
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
         when(cartRepository.findByUserId(user.getId())).thenReturn(Optional.of(cart));
+
         when(cartItemRepository.findById(4L)).thenReturn(Optional.of(item));
 
         assertThrows(ValidationException.class, () -> cartService.updateItemQuantity(user.getEmail(), 4L, request));

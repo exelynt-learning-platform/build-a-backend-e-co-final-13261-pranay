@@ -16,6 +16,7 @@ import com.pranay.ecommerce_backend.service.PaymentService;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.param.PaymentIntentCreateParams;
+import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
@@ -40,6 +41,23 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Value("${app.supported.currencies}")
     private List<String> supportedCurrencies;
+
+    private List<String> normalizedCurrencies;
+
+    @PostConstruct
+    public void init() {
+        if (supportedCurrencies == null || supportedCurrencies.isEmpty()) {
+            log.error("Supported currencies not configured");
+            throw new IllegalStateException("Supported currencies must be configured in application.properties");
+        }
+
+        normalizedCurrencies = supportedCurrencies.stream()
+                .filter(StringUtils::hasText)
+                .map(c -> c.trim().toLowerCase(Locale.ROOT))
+                .toList();
+
+        log.info("Supported currencies loaded: {}", normalizedCurrencies);
+    }
 
     @Override
     @Transactional
@@ -81,16 +99,13 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     @Transactional
     public PaymentResponse confirmPayment(String userEmail, PaymentConfirmationRequest request) {
-
         log.debug("Confirming payment for user: {} paymentIntentId: {}", userEmail, request.getPaymentIntentId());
 
-        //  LOCKED FETCH (IMPORTANT)
         CustomerOrder order = orderRepository.findByPaymentIntentIdForUpdate(request.getPaymentIntentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found for payment intent"));
 
         validateUserAccess(userEmail, order);
 
-        //  Prevent double confirmation
         if (order.getStatus() == OrderStatus.PAID) {
             throw new ValidationException("Payment already confirmed for this order");
         }
@@ -101,7 +116,6 @@ public class PaymentServiceImpl implements PaymentService {
 
             OrderStatus newStatus = mapOrderStatus(paymentStatus);
 
-            //  only valid transition allow
             if (order.getStatus() == OrderStatus.PAID) {
                 throw new ValidationException("Order already paid");
             }
@@ -149,16 +163,21 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private String resolveCurrency(PaymentIntentRequest request) {
-        String resolved = StringUtils.hasText(request.getCurrency())
-                ? request.getCurrency().trim().toLowerCase(Locale.ROOT)
-                : currency.toLowerCase(Locale.ROOT);
 
-        // normalize config values also
-        List<String> normalizedCurrencies = supportedCurrencies.stream()
-                .map(c -> c.toLowerCase(Locale.ROOT))
-                .toList();
+        String requestedCurrency = request.getCurrency();
+        String resolved;
+
+        if (StringUtils.hasText(requestedCurrency)) {
+            resolved = requestedCurrency.trim().toLowerCase(Locale.ROOT);
+        } else if (StringUtils.hasText(currency)) {
+            resolved = currency.trim().toLowerCase(Locale.ROOT);
+        } else {
+            log.error("No currency provided and default currency missing");
+            throw new ValidationException("Currency not specified");
+        }
 
         if (!normalizedCurrencies.contains(resolved)) {
+            log.warn("Unsupported currency attempted: {}", resolved);
             throw new ValidationException("Unsupported currency: " + resolved);
         }
 

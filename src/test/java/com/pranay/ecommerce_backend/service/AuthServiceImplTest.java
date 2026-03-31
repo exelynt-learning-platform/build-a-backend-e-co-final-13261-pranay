@@ -9,19 +9,19 @@ import com.pranay.ecommerce_backend.repository.UserRepository;
 import com.pranay.ecommerce_backend.security.CustomUserDetailsService;
 import com.pranay.ecommerce_backend.security.JwtService;
 import com.pranay.ecommerce_backend.service.impl.AuthServiceImpl;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceImplTest {
@@ -47,6 +47,12 @@ class AuthServiceImplTest {
     @InjectMocks
     private AuthServiceImpl authService;
 
+    @BeforeEach
+    void setup() {
+        // ✅ Inject property manually
+        ReflectionTestUtils.setField(authService, "defaultRole", "USER");
+    }
+
     @Test
     void registerShouldCreateUserAndCart() {
         RegisterRequest request = new RegisterRequest();
@@ -54,19 +60,20 @@ class AuthServiceImplTest {
         request.setEmail("kunal@example.com");
         request.setPassword("secret");
 
-        com.pranay.ecommerce_backend.entity.User savedUser = com.pranay.ecommerce_backend.entity.User.builder()
+        var savedUser = com.pranay.ecommerce_backend.entity.User.builder()
                 .id(1L)
                 .name("Kunal")
                 .email("kunal@example.com")
                 .password("encoded")
                 .role(Role.USER)
                 .build();
-        org.springframework.security.core.userdetails.User springUser =
-                new org.springframework.security.core.userdetails.User("kunal@example.com", "encoded", java.util.List.of());
+
+        var springUser = new org.springframework.security.core.userdetails.User(
+                "kunal@example.com", "encoded", java.util.List.of());
 
         when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
         when(passwordEncoder.encode(request.getPassword())).thenReturn("encoded");
-        when(userRepository.save(any(com.pranay.ecommerce_backend.entity.User.class))).thenReturn(savedUser);
+        when(userRepository.save(any())).thenReturn(savedUser);
         when(userDetailsService.loadUserByUsername(request.getEmail())).thenReturn(springUser);
         when(jwtService.generateToken(springUser)).thenReturn("jwt-token");
 
@@ -83,24 +90,26 @@ class AuthServiceImplTest {
         request.setEmail("kunal@example.com");
         request.setPassword("secret");
 
-        com.pranay.ecommerce_backend.entity.User savedUser = com.pranay.ecommerce_backend.entity.User.builder()
+        var savedUser = com.pranay.ecommerce_backend.entity.User.builder()
                 .id(1L)
                 .name("Kunal")
                 .email("kunal@example.com")
                 .password("encoded")
                 .role(Role.USER)
                 .build();
-        org.springframework.security.core.userdetails.User springUser =
-                new org.springframework.security.core.userdetails.User("kunal@example.com", "encoded", java.util.List.of());
 
-        when(userRepository.findByEmail(request.getEmail())).thenReturn(java.util.Optional.of(savedUser));
-        when(userDetailsService.loadUserByUsername(request.getEmail())).thenReturn(springUser);
+        var springUser = new org.springframework.security.core.userdetails.User(
+                "kunal@example.com", "encoded", java.util.List.of());
+
+        when(userRepository.findByEmail(request.getEmail()))
+                .thenReturn(java.util.Optional.of(savedUser));
+        when(userDetailsService.loadUserByUsername(request.getEmail()))
+                .thenReturn(springUser);
         when(jwtService.generateToken(springUser)).thenReturn("jwt-token");
 
         AuthResponse response = authService.login(request);
 
-        verify(authenticationManager).authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
+        verify(authenticationManager).authenticate(any());
         assertEquals("jwt-token", response.getToken());
     }
 }

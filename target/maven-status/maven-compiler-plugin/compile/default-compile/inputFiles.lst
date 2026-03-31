@@ -48,9 +48,11 @@ D:\My Personal Project\Spring Boot\build-a-backend-e-co-final-13261-pranay\src\m
 D:\My Personal Project\Spring Boot\build-a-backend-e-co-final-13261-pranay\src\main\java\com\pranay\ecommerce_backend\service\CartService.java
 D:\My Personal Project\Spring Boot\build-a-backend-e-co-final-13261-pranay\src\main\java\com\pranay\ecommerce_backend\service\impl\AuthServiceImpl.java
 D:\My Personal Project\Spring Boot\build-a-backend-e-co-final-13261-pranay\src\main\java\com\pranay\ecommerce_backend\service\impl\CartServiceImpl.java
+D:\My Personal Project\Spring Boot\build-a-backend-e-co-final-13261-pranay\src\main\java\com\pranay\ecommerce_backend\service\impl\InventoryServiceImpl.java
 D:\My Personal Project\Spring Boot\build-a-backend-e-co-final-13261-pranay\src\main\java\com\pranay\ecommerce_backend\service\impl\OrderServiceImpl.java
 D:\My Personal Project\Spring Boot\build-a-backend-e-co-final-13261-pranay\src\main\java\com\pranay\ecommerce_backend\service\impl\PaymentServiceImpl.java
 D:\My Personal Project\Spring Boot\build-a-backend-e-co-final-13261-pranay\src\main\java\com\pranay\ecommerce_backend\service\impl\ProductServiceImpl.java
+D:\My Personal Project\Spring Boot\build-a-backend-e-co-final-13261-pranay\src\main\java\com\pranay\ecommerce_backend\service\InventoryService.java
 D:\My Personal Project\Spring Boot\build-a-backend-e-co-final-13261-pranay\src\main\java\com\pranay\ecommerce_backend\service\OrderService.java
 D:\My Personal Project\Spring Boot\build-a-backend-e-co-final-13261-pranay\src\main\java\com\pranay\ecommerce_backend\service\PaymentService.java
 D:\My Personal Project\Spring Boot\build-a-backend-e-co-final-13261-pranay\src\main\java\com\pranay\ecommerce_backend\service\ProductService.java
